@@ -65,6 +65,7 @@ ompl_interface::ConstrainedGoalSampler::ConstrainedGoalSampler(const ModelBasedP
 {
   if (!constraint_sampler_)
     default_sampler_ = si_->allocStateSampler();
+  setThreshold(pc->getGoalThreshold());
   ROS_DEBUG_NAMED(LOGNAME, "Constructed a ConstrainedGoalSampler instance at address %p", this);
   startSampling();
 }

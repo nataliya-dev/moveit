@@ -1301,7 +1301,7 @@ void PlanningSceneMonitor::updateSceneWithCurrentState()
     {
       boost::unique_lock<boost::shared_mutex> ulock(scene_update_mutex_);
       last_update_time_ = last_robot_motion_time_ = current_state_monitor_->getCurrentStateTime();
-      ROS_DEBUG_STREAM_NAMED(LOGNAME, "robot state update " << fmod(last_robot_motion_time_.toSec(), 10.));
+      // ROS_DEBUG_STREAM_NAMED(LOGNAME, "robot state update " << fmod(last_robot_motion_time_.toSec(), 10.));
       current_state_monitor_->setToCurrentState(scene_->getCurrentStateNonConst());
       scene_->getCurrentStateNonConst().update();  // compute all transforms
     }

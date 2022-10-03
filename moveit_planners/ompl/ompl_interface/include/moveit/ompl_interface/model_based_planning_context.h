@@ -273,6 +273,16 @@ public:
     hybridize_ = flag;
   }
 
+  void setGoalThreshold(double gt)
+  {
+    goal_threshold_ = gt;
+  }
+
+  double getGoalThreshold() const
+  {
+    return goal_threshold_;
+  }
+
   /* @brief Solve the planning problem. Return true if the problem is solved
      @param timeout The time to spend on solving
      @param count The number of runs to combine the paths of, in an attempt to generate better quality paths
@@ -433,5 +443,9 @@ protected:
 
   // if false parallel plan returns the first solution found
   bool hybridize_;
+
+  // The maximum distance that is allowed to the goal. By default, this is initialized to the minimum epsilon value a
+  // double can represent
+  double goal_threshold_ = std::numeric_limits<double>::epsilon();
 };
 }  // namespace ompl_interface
