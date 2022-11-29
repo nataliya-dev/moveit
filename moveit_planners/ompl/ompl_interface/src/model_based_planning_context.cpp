@@ -685,6 +685,11 @@ bool ompl_interface::ModelBasedPlanningContext::solve(planning_interface::Motion
   res.error_code_ = solve(request_.allowed_planning_time, request_.num_planning_attempts);
   if (res.error_code_.val == moveit_msgs::MoveItErrorCodes::SUCCESS)
   {
+    rawTrajectoryPtr_ = std::make_shared<robot_trajectory::RobotTrajectory>(getRobotModel(), getGroupName());
+    getSolutionPath(*rawTrajectoryPtr_);
+    ROS_DEBUG_NAMED(LOGNAME, "%s: Raw solution path contains %lu states", getName().c_str(),
+                    getOMPLSimpleSetup()->getSolutionPath().getStateCount());
+
     double ptime = getLastPlanTime();
     if (simplify_solutions_)
     {

@@ -309,6 +309,11 @@ public:
     return last_simplify_time_;
   }
 
+  robot_trajectory::RobotTrajectory getRawTrajectory() const
+  {
+    return *rawTrajectoryPtr_;
+  }
+
   /* @brief Apply smoothing and try to simplify the plan
      @param timeout The amount of time allowed to be spent on simplifying the plan*/
   void simplifySolution(double timeout);
@@ -450,5 +455,7 @@ protected:
   // The maximum distance that is allowed to the goal. By default, this is initialized to the minimum epsilon value a
   // double can represent
   double goal_threshold_ = std::numeric_limits<double>::epsilon();
+
+  robot_trajectory::RobotTrajectoryPtr rawTrajectoryPtr_;
 };
 }  // namespace ompl_interface
