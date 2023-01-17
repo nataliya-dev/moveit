@@ -18,7 +18,7 @@
     version: noetic-devel
 - git:
     local-name: moveit
-    uri: https://github.com/ros-planning/moveit.git
+    uri: git@github.com:nataliya-dev/moveit.git
     version: master
 - git:
     local-name: rviz_visual_tools
