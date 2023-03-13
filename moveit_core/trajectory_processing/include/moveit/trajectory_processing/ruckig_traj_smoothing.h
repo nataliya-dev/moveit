@@ -37,6 +37,7 @@
 
 #include <Eigen/Core>
 #include <list>
+#include <unordered_map>
 #include <moveit/robot_trajectory/robot_trajectory.h>
 #include <ruckig/ruckig.hpp>
 
@@ -80,8 +81,8 @@ private:
    * \param joint_group         The MoveIt JointModelGroup of interest
    * \param[out] ruckig_input   The Rucking parameters for the next iteration
    */
-  static void getNextRuckigInput(const moveit::core::RobotStatePtr& current_waypoint,
-                                 const moveit::core::RobotStatePtr& next_waypoint,
+  static void getNextRuckigInput(const moveit::core::RobotStateConstPtr& current_waypoint,
+                                 const moveit::core::RobotStateConstPtr& next_waypoint,
                                  const moveit::core::JointModelGroup* joint_group,
                                  ruckig::InputParameter<ruckig::DynamicDOFs>& ruckig_input);
 
@@ -89,8 +90,8 @@ private:
    * \brief Initialize Ruckig position/vel/accel. This initializes ruckig_input and ruckig_output to the same values
    * \param first_waypoint  The Ruckig input/output parameters are initialized to the values at this waypoint
    * \param joint_group     The MoveIt JointModelGroup of interest
-   * \param[out] rucking_input   Input parameters to Ruckig. Initialized here.
-   * \param[out] ruckig_output   Output from the Ruckig algorithm. Initialized here.
+   * \param[out] ruckig_input   Input parameters to Ruckig. Initialized here.
+   * \param[out] ruckig_output  Output from the Ruckig algorithm. Initialized here.
    */
   static void initializeRuckigState(const moveit::core::RobotState& first_waypoint,
                                     const moveit::core::JointModelGroup* joint_group,
@@ -107,9 +108,10 @@ private:
    * There is a trade-off between time-optimality of the output trajectory and runtime of the smoothing algorithm.
    * \param[in, out] trajectory      Trajectory to smooth.
    * \param[in, out] ruckig_input    Necessary input for Ruckig smoothing. Contains kinematic limits (vel, accel, jerk)
+   * \param[in]      batch_size      Minimum number of waypoints to include within a batch
    */
   static std::optional<robot_trajectory::RobotTrajectory>
-  runRuckigInBatches(const size_t num_waypoints, const robot_trajectory::RobotTrajectory& trajectory,
+  runRuckigInBatches(const robot_trajectory::RobotTrajectory& trajectory,
                      ruckig::InputParameter<ruckig::DynamicDOFs>& ruckig_input, size_t batch_size = 100);
 
   /**
@@ -119,5 +121,19 @@ private:
    */
   [[nodiscard]] static bool runRuckig(robot_trajectory::RobotTrajectory& trajectory,
                                       ruckig::InputParameter<ruckig::DynamicDOFs>& ruckig_input);
+
+  /**
+   * \brief Extend the duration of every trajectory segment
+   * \param[in] duration_extension_factor A number greater than 1. Extend every timestep by this much.
+   * \param[in] num_waypoints Number of waypoints in the trajectory.
+   * \param[in] num_dof Degrees of freedom in the manipulator.
+   * \param[in] move_group_idx For accessing the joints of interest out of the full RobotState.
+   * \param[in] original_trajectory Durations are extended based on the data in this original trajectory.
+   * \param[in, out] trajectory This trajectory will be returned with modified waypoint durations.
+   */
+  static void extendTrajectoryDuration(const double duration_extension_factor, size_t num_waypoints,
+                                       const size_t num_dof, const std::vector<int>& move_group_idx,
+                                       const robot_trajectory::RobotTrajectory& original_trajectory,
+                                       robot_trajectory::RobotTrajectory& trajectory);
 };
 }  // namespace trajectory_processing
