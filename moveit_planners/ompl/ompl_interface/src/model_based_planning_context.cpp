@@ -413,8 +413,8 @@ void ompl_interface::ModelBasedPlanningContext::simplifySolution(double timeout)
 
   ompl_simple_setup_->simplifySolution(ptc);
 
-  // if (!simplifyWrapFunc_)
-  //   simplifyWrapFunc_(true);
+  if (!simplifyWrapFunc_)
+    simplifyWrapFunc_(true);
 
   last_simplify_time_ = ompl_simple_setup_->getLastSimplificationTime();
   unregisterTerminationCondition();
@@ -695,8 +695,8 @@ bool ompl_interface::ModelBasedPlanningContext::solve(planning_interface::Motion
   {
     rawTrajectoryPtr_ = std::make_shared<robot_trajectory::RobotTrajectory>(getRobotModel(), getGroupName());
     getSolutionPath(*rawTrajectoryPtr_);
-    ROS_DEBUG_NAMED(LOGNAME, "%s: Raw solution path contains %lu states", getName().c_str(),
-                    getOMPLSimpleSetup()->getSolutionPath().getStateCount());
+    ROS_INFO_NAMED(LOGNAME, "%s: Raw solution path contains %lu states", getName().c_str(),
+                   getOMPLSimpleSetup()->getSolutionPath().getStateCount());
 
     double ptime = getLastPlanTime();
     if (simplify_solutions_)
