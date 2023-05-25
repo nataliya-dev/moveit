@@ -60,8 +60,6 @@ typedef std::function<ob::PlannerPtr(const ompl::base::SpaceInformationPtr& si, 
     ConfiguredPlannerAllocator;
 typedef std::function<ConfiguredPlannerAllocator(const std::string& planner_type)> ConfiguredPlannerSelector;
 
-using SimplifyWrapFunc = std::function<void(bool)>;
-
 struct ModelBasedPlanningContextSpecification
 {
   std::map<std::string, std::string> config_;
@@ -284,13 +282,6 @@ public:
   {
     return goal_threshold_;
   }
-
-  // void dummy(bool)
-  // {
-  //   return;
-  // }
-
-  SimplifyWrapFunc simplifyWrapFunc_ = nullptr;
 
   /* @brief Solve the planning problem. Return true if the problem is solved
      @param timeout The time to spend on solving
