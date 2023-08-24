@@ -43,6 +43,8 @@
 #include <moveit/trajectory_processing/time_optimal_trajectory_generation.h>
 #include <ros/console.h>
 #include <vector>
+#include <ruckig/ruckig.hpp>
+
 
 namespace trajectory_processing
 {
@@ -855,6 +857,49 @@ Eigen::VectorXd Trajectory::getAcceleration(double time) const
   return path_acc;
 }
 
+
+ruckig::Trajectory<7> get_ruckig_trajectory(std::list<Eigen::VectorXd> points) {
+  int points_size = points.size();
+  const double control_cycle {0.01};
+  const size_t DOFs {7};
+  const size_t max_number_of_waypoints {points_size-2};  // for memory allocation
+
+    // Create instances: the Ruckig OTG as well as input and output parameters
+  ruckig::Ruckig<DOFs> ruckig_7(control_cycle, max_number_of_waypoints);
+
+  ruckig::InputParameter<7> input;
+  std::cout<<"current position is: "<<points.front()[0]<<points.front()[1]<<points.front()[2]<<points.front()[3]<<points.front()[4]<<points.front()[5]<<points.front()[6]<<std::endl;
+  input.current_position = {points.front()[0], points.front()[1], points.front()[2], points.front()[3], points.front()[4], points.front()[5], points.front()[6]};
+  input.current_velocity = {0, 0, 0, 0, 0, 0, 0};
+  input.current_acceleration = {0, 0, 0, 0, 0, 0, 0};
+
+  std::cout<<"target position is: "<<points.back()[0]<<points.back()[1]<<points.back()[2]<<points.back()[3]<<points.back()[4]<<points.back()[5]<<points.back()[6]<<std::endl;
+  input.target_position = {points.back()[0], points.back()[1], points.back()[2], points.back()[3], points.back()[4], points.back()[5], points.back()[6]};
+  input.target_velocity = {0, 0, 0, 0, 0, 0, 0};
+  input.target_acceleration = {0, 0, 0, 0, 0, 0, 0};
+
+  input.max_velocity = {2.1750, 2.1750, 2.1750, 2.1750, 2.6100, 2.6100, 2.1600};
+  input.max_acceleration = {15, 7.5, 10, 12.5, 15, 20, 20};
+  input.max_jerk = {7500, 3750, 5000, 6250, 7500, 10000, 10000};
+
+  int i = 0; 
+  std::vector<std::array<double, 7>> intermediate_positions(points_size - 2);
+  for (auto const& point : points) {
+    if (i != 0 && i != points_size - 1) {
+      std::cout<<"Intermediate points are: "<<point[0]<<point[1]<<point[2]<<point[3]<<point[4]<<point[5]<<point[6]<<std::endl;
+      intermediate_positions.push_back({point[0], point[1], point[2], point[3], point[4], point[5], point[6]});
+    }
+    i++;
+  }
+  input.intermediate_positions = intermediate_positions;
+  ruckig::Trajectory<7> trajectory;
+  ruckig::Result result = ruckig_7.calculate(input, trajectory);
+
+  std::cout<<"Ruckig result is: "<<result<<std::endl;
+  return trajectory;
+}
+
+
 TimeOptimalTrajectoryGeneration::TimeOptimalTrajectoryGeneration(const double path_tolerance, const double resample_dt,
                                                                  const double min_angle_change)
   : path_tolerance_(path_tolerance), resample_dt_(resample_dt), min_angle_change_(min_angle_change)
@@ -990,39 +1035,75 @@ bool TimeOptimalTrajectoryGeneration::computeTimeStamps(robot_trajectory::RobotT
     return true;
   }
 
+  
   // Now actually call the algorithm
-  Trajectory parameterized(Path(points, path_tolerance_), max_velocity, max_acceleration, 0.001);
-  if (!parameterized.isValid())
-  {
-    ROS_ERROR_NAMED(LOGNAME, "Unable to parameterize trajectory.");
-    return false;
-  }
+  // Trajectory parameterized(Path(points, path_tolerance_), max_velocity, max_acceleration, 0.001);
+  // if (!parameterized.isValid())
+  // {
+  //   ROS_ERROR_NAMED(LOGNAME, "Unable to parameterize trajectory.");
+  //   return false;
+  // }
 
-  // Compute sample count
-  size_t sample_count = std::ceil(parameterized.getDuration() / resample_dt_);
+  // RUCKIG HERE
+  ruckig::Trajectory ruckig_trajectory = get_ruckig_trajectory(points);
+  
+  std::array<double, 7> new_position;
+  std::array<double, 7> new_velocity;
+  std::array<double, 7> new_acceleration;
 
-  // Resample and fill in trajectory
+// current position is: -0.4128940.841556-1.21653-1.454690.7661971.79544-0.893028
+// target position is: 1.67806 0.949824 -1.31709 -1.48209 0.907066 1.77358 1.25069
+
+  double dt = 0.001;
+  double time = 0.0;
+  double traj_duration = ruckig_trajectory.get_duration();
   moveit::core::RobotState waypoint = moveit::core::RobotState(trajectory.getWayPoint(0));
+  // std::cout<<"GetWayPoint(0): "<<trajectory.getWayPoint(0) <<std::endl;
   trajectory.clear();
-  double last_t = 0;
-  for (size_t sample = 0; sample <= sample_count; ++sample)
-  {
-    // always sample the end of the trajectory as well
-    double t = std::min(parameterized.getDuration(), sample * resample_dt_);
-    Eigen::VectorXd position = parameterized.getPosition(t);
-    Eigen::VectorXd velocity = parameterized.getVelocity(t);
-    Eigen::VectorXd acceleration = parameterized.getAcceleration(t);
 
+  while (time <= traj_duration) {
+    ruckig_trajectory.at_time(time, new_position, new_velocity, new_acceleration);
+    Eigen::VectorXd position = Eigen::Map<Eigen::VectorXd>(new_position.data(), new_position.size());
+    Eigen::VectorXd velocity = Eigen::Map<Eigen::VectorXd>(new_velocity.data(), new_velocity.size());
+    Eigen::VectorXd acceleration = Eigen::Map<Eigen::VectorXd>(new_acceleration.data(), new_acceleration.size());
     for (size_t j = 0; j < num_joints; ++j)
     {
       waypoint.setVariablePosition(idx[j], position[j]);
       waypoint.setVariableVelocity(idx[j], velocity[j]);
       waypoint.setVariableAcceleration(idx[j], acceleration[j]);
     }
-
-    trajectory.addSuffixWayPoint(waypoint, t - last_t);
-    last_t = t;
+    trajectory.addSuffixWayPoint(waypoint, dt);
+    time += dt;
   }
+  
+
+
+
+  // Compute sample count
+  // size_t sample_count = std::ceil(parameterized.getDuration() / resample_dt_);
+
+  // Resample and fill in trajectory
+  // moveit::core::RobotState waypoint = moveit::core::RobotState(trajectory.getWayPoint(0));
+  // trajectory.clear();
+  // double last_t = 0;
+  // for (size_t sample = 0; sample <= sample_count; ++sample)
+  // {
+  //   // always sample the end of the trajectory as well
+  //   double t = std::min(parameterized.getDuration(), sample * resample_dt_);
+  //   Eigen::VectorXd position = parameterized.getPosition(t);
+  //   Eigen::VectorXd velocity = parameterized.getVelocity(t);
+  //   Eigen::VectorXd acceleration = parameterized.getAcceleration(t);
+
+  //   for (size_t j = 0; j < num_joints; ++j)
+  //   {
+  //     waypoint.setVariablePosition(idx[j], position[j]);
+  //     waypoint.setVariableVelocity(idx[j], velocity[j]);
+  //     waypoint.setVariableAcceleration(idx[j], acceleration[j]);
+  //   }
+
+  //   trajectory.addSuffixWayPoint(waypoint, t - last_t);
+  //   last_t = t;
+  // }
 
   return true;
 }
