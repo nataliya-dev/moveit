@@ -314,9 +314,9 @@ void CollisionEnvFCL::checkRobotCollisionHelper(const CollisionRequest& req, Col
 
   CollisionData cd(&req, &res, acm);
   cd.enableGroup(getRobotModel());
-  for (std::size_t i = 0; !cd.done_ && i < fcl_obj.collision_objects_.size(); ++i)
+  for (std::size_t i = 0; !cd.done_ && i < fcl_obj.collision_objects_.size(); ++i){
     manager_->collide(fcl_obj.collision_objects_[i].get(), &cd, &collisionCallback);
-
+  }
   if (req.distance)
   {
     DistanceRequest dreq;

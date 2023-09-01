@@ -53,6 +53,7 @@ endif()
 find_package(octomap REQUIRED)
 
 find_package(ruckig REQUIRED)
+
 # work around catkin_package not fetching the interface includes from the target
 # to forward to downstream dependencies. The includes do not need to be added
 # in include_directories below because the target is correctly imported here.

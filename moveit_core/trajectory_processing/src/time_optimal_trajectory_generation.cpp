@@ -44,6 +44,27 @@
 #include <ros/console.h>
 #include <vector>
 
+#include <pybind11/embed.h>
+#include <pybind11/stl.h>
+#include <pybind11/stl_bind.h>
+
+
+#include <kdl/chainiksolverpos_nr_jl.hpp>
+#include <kdl/chainiksolvervel_pinv.hpp>
+#include <kdl/chainfksolverpos_recursive.hpp>
+#include <kdl/frames.hpp>
+#include <kdl/jntarray.hpp>
+#include <kdl_parser/kdl_parser.hpp>
+#include <kdl/chainiksolverpos_nr_jl.hpp>
+#include <kdl/chainiksolvervel_pinv.hpp>
+#include <kdl/frames.hpp>
+#include <kdl/jntarray.hpp>
+#include <kdl_parser/kdl_parser.hpp>
+
+
+namespace py = pybind11;
+py::scoped_interpreter python{};
+auto trajectoryClassifier = py::module::import("trajectory_model").attr("spilled");
 
 namespace trajectory_processing
 {
@@ -856,36 +877,124 @@ Eigen::VectorXd Trajectory::getAcceleration(double time) const
   return path_acc;
 }
 
+std::array<double, 7> fk(std::array<double, 7> q)
+{
+  KDL::Tree my_tree;
+  kdl_parser::treeFromFile("/home/ava/projects/action_ws/panda.urdf", my_tree);
+  KDL::Chain chain;
+  my_tree.getChain("panda_link0", "panda_link8", chain);
 
-ruckig::Trajectory<7> get_ruckig_trajectory(std::list<Eigen::VectorXd> points) {
+  KDL::JntArray jointpositions = KDL::JntArray(chain.getNrOfJoints());
+
+  for (int i = 0; i < 7; i++)
+  {
+    jointpositions(i) = q[i];
+  }
+
+  KDL::Frame cartpos;
+  KDL::ChainFkSolverPos_recursive fksolver = KDL::ChainFkSolverPos_recursive(chain);
+
+  bool kinematics_status;
+  kinematics_status = fksolver.JntToCart(jointpositions, cartpos);
+
+  if (kinematics_status >= 0)
+  {
+    std::array<double, 7> ee_pose;
+    for (int i = 0; i < 3; i++)
+    {
+      ee_pose[i] = cartpos.p[i];
+    }
+    for (int i = 0; i < 4; i++)
+    {
+      ee_pose[i + 3] = cartpos.M.data[i];
+    }
+    return ee_pose;
+  }
+  else
+  {
+    // throw ompl::Exception("Could not calculate forward kinematics");
+    ROS_ERROR_NAMED(LOGNAME, "Could not calculate forward kinematics, returning bullshit");
+    return {0, 0, 0, 0, 0, 0, 0};
+  }
+}
+
+bool spills(ruckig::Trajectory<7> trajectory, double threshold)
+{
+  double traj_duration = trajectory.get_duration();
+  double dt = 0.001;
+  double time = 0.0;
+
+  std::array<double, 7> new_q;
+  std::array<double, 7> new_qdot;
+  std::array<double, 7> new_qddot;
+
+  std::vector<std::array<double, 7>> trajectory_in_cartesian;
+  while (time <= traj_duration)
+  {
+    trajectory.at_time(time, new_q, new_qdot, new_qddot);
+    std::array<double, 7> cartesian_pos = fk(new_q);
+    trajectory_in_cartesian.push_back(cartesian_pos);
+    time += dt;
+  }
+
+  py::list py_traj_cartesian = py::cast(trajectory_in_cartesian);
+  auto resultobj = trajectoryClassifier(py_traj_cartesian);
+  double result = resultobj.cast<double>();
+  std::cout<<"Spill Result: "<<result<<std::endl;
+  return result >= threshold;
+}
+
+ruckig::Trajectory<7> get_ruckig_trajectory(std::list<Eigen::VectorXd> points)
+{
   u_int points_size = points.size();
-  const double control_cycle {0.001};
-  const size_t DOFs {7};
-  const size_t max_number_of_waypoints {points_size -2};
-  ruckig::Ruckig<DOFs> ruckig_7{control_cycle, max_number_of_waypoints};
-  ruckig::InputParameter<DOFs> input{max_number_of_waypoints};
+  const double control_cycle{ 0.001 };
+  const size_t DOFs{ 7 };
+  const size_t max_number_of_waypoints{ points_size - 2 };
+  ruckig::Ruckig<DOFs> ruckig_7{ control_cycle, max_number_of_waypoints };
+  ruckig::InputParameter<DOFs> input{ max_number_of_waypoints };
 
-  input.current_position = {points.front()[0], points.front()[1], points.front()[2], points.front()[3], points.front()[4], points.front()[5], points.front()[6]};
-  input.current_velocity = {0, 0, 0, 0, 0, 0, 0};
-  input.current_acceleration = {0, 0, 0, 0, 0, 0, 0};
+  input.current_position = { points.front()[0], points.front()[1], points.front()[2], points.front()[3],
+                             points.front()[4], points.front()[5], points.front()[6] };
+  input.current_velocity = { 0, 0, 0, 0, 0, 0, 0 };
+  input.current_acceleration = { 0, 0, 0, 0, 0, 0, 0 };
 
-  input.target_position = {points.back()[0], points.back()[1], points.back()[2], points.back()[3], points.back()[4], points.back()[5], points.back()[6]};
-  input.target_velocity = {0, 0, 0, 0, 0, 0, 0};
-  input.target_acceleration = {0, 0, 0, 0, 0, 0, 0};
+  input.target_position = { points.back()[0], points.back()[1], points.back()[2], points.back()[3],
+                            points.back()[4], points.back()[5], points.back()[6] };
+  input.target_velocity = { 0, 0, 0, 0, 0, 0, 0 };
+  input.target_acceleration = { 0, 0, 0, 0, 0, 0, 0 };
 
-  input.max_velocity = {2.1750, 2.1750, 2.1750, 2.1750, 2.6100, 2.6100, 2.1600};
-  input.max_acceleration = {15, 7.5, 10, 12.5, 15, 20, 20};
+  input.max_velocity = {2.1750/4, 2.1750/4, 2.1750/4, 2.1750/4, 2.6100/4, 2.6100/4, 2.1600/4};
+  input.max_acceleration = {15/8, 7.5/8, 10/8, 12.5/8, 15/8, 20/8, 20/8};
   input.max_jerk = {7500, 3750, 5000, 6250, 7500, 10000, 10000};
 
-  for(int i=1; i<points.size()-1; ++i) {
-      auto it = points.begin();
-      std::advance(it, i);
-      input.intermediate_positions.push_back({(*it)[0], (*it)[1], (*it)[2], (*it)[3], (*it)[4], (*it)[5], (*it)[6]});
+  for (int i = 1; i < points.size() - 1; ++i)
+  {
+    auto it = points.begin();
+    std::advance(it, i);
+    input.intermediate_positions.push_back({ (*it)[0], (*it)[1], (*it)[2], (*it)[3], (*it)[4], (*it)[5], (*it)[6] });
   }
 
   ruckig::Trajectory<7> trajectory;
-  ruckig::Result result = ruckig_7.calculate(input, trajectory);
-  std::cout<<"Ruckig result is: "<<result<<std::endl;
+  bool it_spills = true;
+  double jerk_decay = 0.5;
+  int num_iterations = 0;
+  while (it_spills && num_iterations <= 5)
+  {
+    std::cout<<"Before calling ruckig"<<std::endl;
+    ruckig::Result result = ruckig_7.calculate(input, trajectory);
+    std::cout<<"After calling ruckig"<<std::endl;
+    it_spills = spills(trajectory, 0.3);
+    std::cout<<"After calling isSpillFree"<<std::endl;
+    input.max_jerk = { input.max_jerk[0] * jerk_decay,
+                       input.max_jerk[1] * jerk_decay,
+                       input.max_jerk[2] * jerk_decay,
+                       input.max_jerk[3] * jerk_decay,
+                       input.max_jerk[4] * jerk_decay,
+                       input.max_jerk[5] * jerk_decay,
+                       input.max_jerk[6] * jerk_decay };
+    std::cout<<"Reducing jerk: "<<num_iterations<<", it spills? "<<it_spills<<std::endl;
+    num_iterations++;
+  }
   return trajectory;
 }
 
@@ -1025,7 +1134,6 @@ bool TimeOptimalTrajectoryGeneration::computeTimeStamps(robot_trajectory::RobotT
     return true;
   }
 
-  
   // Now actually call the algorithm
   // Trajectory parameterized(Path(points, path_tolerance_), max_velocity, max_acceleration, 0.001);
   // if (!parameterized.isValid())
@@ -1036,7 +1144,7 @@ bool TimeOptimalTrajectoryGeneration::computeTimeStamps(robot_trajectory::RobotT
 
   // RUCKIG HERE
   ruckig::Trajectory ruckig_trajectory = get_ruckig_trajectory(points);
-  
+
   std::array<double, 7> new_position;
   std::array<double, 7> new_velocity;
   std::array<double, 7> new_acceleration;
@@ -1047,7 +1155,8 @@ bool TimeOptimalTrajectoryGeneration::computeTimeStamps(robot_trajectory::RobotT
   moveit::core::RobotState waypoint = moveit::core::RobotState(trajectory.getWayPoint(0));
   trajectory.clear();
 
-  while (time <= traj_duration) {
+  while (time <= traj_duration)
+  {
     ruckig_trajectory.at_time(time, new_position, new_velocity, new_acceleration);
     Eigen::VectorXd position = Eigen::Map<Eigen::VectorXd>(new_position.data(), new_position.size());
     Eigen::VectorXd velocity = Eigen::Map<Eigen::VectorXd>(new_velocity.data(), new_velocity.size());
@@ -1061,9 +1170,6 @@ bool TimeOptimalTrajectoryGeneration::computeTimeStamps(robot_trajectory::RobotT
     trajectory.addSuffixWayPoint(waypoint, dt);
     time += dt;
   }
-  
-
-
 
   // Compute sample count
   // size_t sample_count = std::ceil(parameterized.getDuration() / resample_dt_);

@@ -114,6 +114,7 @@ bool RuckigSmoothing::applySmoothing(robot_trajectory::RobotTrajectory& trajecto
 
   // Check if custom limits were supplied as arguments to overwrite the defaults
   const std::vector<std::string>& vars = group->getVariableNames();
+  
   const unsigned num_joints = group->getVariableCount();
   for (size_t j = 0; j < num_joints; ++j)
   {

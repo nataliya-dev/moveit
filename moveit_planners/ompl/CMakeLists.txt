@@ -10,8 +10,13 @@ find_package(catkin REQUIRED COMPONENTS
   pluginlib
   tf2
   dynamic_reconfigure
+  trac_ik_lib
+  nlopt
 )
+
 moveit_build_options()
+
+find_package(trac_ik_lib REQUIRED)
 
 find_package(ompl REQUIRED)
 
@@ -20,6 +25,7 @@ generate_dynamic_reconfigure_options("ompl_interface/cfg/OMPLDynamicReconfigure.
 catkin_package(
   LIBRARIES
     moveit_ompl_interface
+    ${nlopt_LIBRARY}
   INCLUDE_DIRS
     ompl_interface/include
   CATKIN_DEPENDS
@@ -33,6 +39,7 @@ catkin_package(
 include_directories(ompl_interface/include)
 include_directories(SYSTEM
                     ${catkin_INCLUDE_DIRS}
+                    ${TRAC_IK_INCLUDE_DIRS}
                     ${Boost_INCLUDE_DIRS}
                     ${OMPL_INCLUDE_DIRS})
 

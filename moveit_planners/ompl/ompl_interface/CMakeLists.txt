@@ -22,18 +22,33 @@ set_target_properties(${MOVEIT_LIB_NAME} PROPERTIES VERSION "${${PROJECT_NAME}_V
 
 find_package(OpenMP REQUIRED)
 
+find_package(trac_ik_lib REQUIRED)
+find_package(nlopt REQUIRED)
+
+
+include_directories(
+  include
+  ${catkin_INCLUDE_DIRS}
+  ${TRAC_IK_INCLUDE_DIRS}
+  ${OMPL_INCLUDE_DIRS}
+  ${nlopt_INCLUDE_DIRS}
+)
+
 target_link_libraries(${MOVEIT_LIB_NAME} ${OMPL_LIBRARIES} ${catkin_LIBRARIES} ${Boost_LIBRARIES})
 set_target_properties(${MOVEIT_LIB_NAME} PROPERTIES COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 set_target_properties(${MOVEIT_LIB_NAME} PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
 
 add_executable(moveit_generate_state_database scripts/generate_state_database.cpp)
-target_link_libraries(moveit_generate_state_database ${MOVEIT_LIB_NAME})
+target_link_libraries(moveit_generate_state_database ${MOVEIT_LIB_NAME} ${TRAC_IK_LIBRARIES} ${nlopt_LIBRARY})
 set_target_properties(moveit_generate_state_database PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
 set_target_properties(moveit_generate_state_database PROPERTIES OUTPUT_NAME "generate_state_database")
 
 add_library(moveit_ompl_planner_plugin src/ompl_planner_manager.cpp)
 set_target_properties(moveit_ompl_planner_plugin PROPERTIES VERSION "${${PROJECT_NAME}_VERSION}")
 target_link_libraries(moveit_ompl_planner_plugin ${MOVEIT_LIB_NAME} ${catkin_LIBRARIES} ${Boost_LIBRARIES})
+
+target_link_libraries(moveit_ompl_planner_plugin ${catkin_LIBRARIES} ${TRAC_IK_LIBRARIES})
+
 add_dependencies(moveit_ompl_planner_plugin ${${PROJECT_NAME}_EXPORTED_TARGETS}) # don't build until necessary msgs are available
 
 install(TARGETS ${MOVEIT_LIB_NAME} moveit_ompl_planner_plugin
@@ -44,6 +59,7 @@ install(TARGETS moveit_generate_state_database
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 install(DIRECTORY include/ DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION})
 
+
 if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_state_space test/test_state_space.cpp)
   target_link_libraries(test_state_space ${MOVEIT_LIB_NAME} ${OMPL_LIBRARIES})
@@ -51,6 +67,7 @@ if(CATKIN_ENABLE_TESTING)
 
   find_package(rostest REQUIRED)
   find_package(tf2_eigen REQUIRED)
+  find_package(trac_ik_kinematics_plugin QUIET)
 
   add_rostest_gtest(test_planning_context_manager
     test/test_planning_context_manager.test

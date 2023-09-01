@@ -475,6 +475,18 @@ JointModelGroup* RobotModel::getEndEffector(const std::string& name)
 
 bool RobotModel::hasJointModelGroup(const std::string& name) const
 {
+  // std::cout<<"name is"<<name<<std::endl;
+  // std::cout<<"joint_model_group_map_.size() is"<<joint_model_group_map_.size()<<std::endl;
+  // std::cout<<"joint_model_group_map_.begin()->first is"<<joint_model_group_map_.begin()->first<<std::endl;
+  // std::cout<<"joint_model_group_map_.end()->first"<<joint_model_group_map_.end()->first<<std::endl;
+  
+  // printModelInfo(std::cout);
+  
+  // std::cout<<"HERE"<<std::endl;
+
+  // std::cout<<"joint_model_group_map_.find(name) is"<<joint_model_group_map_.find(name)<<std::endl;
+  
+  
   return joint_model_group_map_.find(name) != joint_model_group_map_.end();
 }
 
